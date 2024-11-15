@@ -1,31 +1,174 @@
-import { writeFileSync, readFileSync, existsSync } from 'fs';
-import path from 'path';
+Isso funcionaria com meu código index.html ? 
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tabela de Preenchimento</title>
+    <style>
+        table { width: 50%; table-layout: fixed; border: 5px solid DarkSlateGrey; border-radius: 10px; padding: 10px; }
+        td { width: 30px; height: 30px; text-align: center; vertical-align: middle; border: 2px solid #c4c4c4; cursor: pointer; }
+        .disabled { background-color: #ccc; font-size: 24px; font-weight: bold; font-family: Verdana, sans-serif; }
+        .user1 { background-color: lightblue; }
+        .user2 { background-color: lightgreen; }
+        .user3 { background-color: lightyellow; }
+        .user4 { background-color: lightcyan; }
+        .user5 { background-color: lightcoral; }
+        .user6 { background-color: lightseagreen; }
+        .user7 { background-color: moccasin; }
+        #btn-relatorio, #btn-limpar-todas { display: none; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+    <h2>Preenchimento da Tabela</h2>
+    <label for="usuario">Usuário:</label>
+    <select id="usuario">
+        <option value="---">Selecione</option>
+        <option value="user1">Usuário 1</option>
+        <option value="user2">Usuário 2</option>
+        <option value="user3">Usuário 3</option>
+        <option value="user4">Usuário 4</option>
+        <option value="user5">Usuário 5</option>
+        <option value="user6">Usuário 6</option>
+        <option value="user7">Usuário 7</option>
+        <option value="admin">Administrador</option>
+    </select>
+    <br><br>
+    <label for="senha">Senha:</label>
+    <input type="password" id="senha">
+    <button onclick="verificarLogin()">Entrar</button>
+    <br><br>
 
-const dataFilePath = path.join(process.cwd(), 'data.json');
+    <table id="tabela"></table>
+    <br>
+    <button onclick="limparCelulasUsuario()">Limpar minhas células</button>
+    <button id="btn-limpar-todas" onclick="limparTodasCelulas()">Limpar todas as células (Admin)</button>
+    <button id="btn-relatorio" onclick="gerarRelatorio()">Gerar Relatório</button>
 
-// Função para salvar os dados em um arquivo JSON
-function saveDataToFile(data) {
-    writeFileSync(dataFilePath, JSON.stringify(data, null, 2));
-}
+    <script>
+        const senhas = ["familia1", "familia2", "familia3", "familia4", "familia5", "familia6", "familia7", "admin"];
+        const usuarios = ["user1", "user2", "user3", "user4", "user5", "user6", "user7", "admin"];
+        let usuarioAtual = null;
+        let loginAtivo = false;
+        let usuarioPreenchidoPorLinha = JSON.parse(localStorage.getItem('usuarioPreenchidoPorLinha')) || Array(70).fill(null).map(() => new Set());
+        let contadoresUsuarios = JSON.parse(localStorage.getItem('contadoresUsuarios')) || { user1: 0, user2: 0, user3: 0, user4: 0, user5: 0, user6: 0, user7: 0 };
 
-// Função para carregar os dados do arquivo JSON
-function loadDataFromFile() {
-    if (existsSync(dataFilePath)) {
-        const data = readFileSync(dataFilePath, 'utf-8');
-        return JSON.parse(data);
-    }
-    return { tabelaDados: [], usuarioPreenchidoPorLinha: [], contadoresUsuarios: {} };
-}
+        function gerarTabela() {
+            let tabelaHTML = '';
+            for (let i = 0; i < 70; i++) {
+                tabelaHTML += '<tr>';
+                for (let j = 0; j < 6; j++) {
+                    tabelaHTML += `<td id="celula-${i}-${j}" onclick="preencherCelula(${i}, ${j})"></td>`;
+                }
+                tabelaHTML += '</tr>';
+            }
+            document.getElementById('tabela').innerHTML = tabelaHTML;
+            carregarDados();
+        }
 
-export default async function handler(req, res) {
-    if (req.method === 'POST') {
-        const data = req.body;
-        saveDataToFile(data);
-        res.status(200).json({ message: 'Dados salvos com sucesso!' });
-    } else if (req.method === 'GET') {
-        const data = loadDataFromFile();
-        res.status(200).json(data);
-    } else {
-        res.status(405).json({ message: 'Método não permitido.' });
-    }
-}
+        function verificarLogin() {
+            const senha = document.getElementById('senha').value;
+            const usuarioSelecionado = document.getElementById('usuario').value;
+            const senhaCorreta = senhas[usuarios.indexOf(usuarioSelecionado)];
+
+            if (senha === senhaCorreta) {
+                loginAtivo = true;
+                usuarioAtual = usuarioSelecionado;
+                alert('Login realizado com sucesso!');
+                if (usuarioAtual === "admin") {
+                    document.getElementById('btn-relatorio').style.display = "inline";
+                    document.getElementById('btn-limpar-todas').style.display = "inline";
+                }
+            } else {
+                alert('Senha incorreta.');
+            }
+        }
+
+        function preencherCelula(linha, coluna) {
+            if (!loginAtivo) {
+                alert('Por favor, faça login.');
+                return;
+            }
+
+            if (contadoresUsuarios[usuarioAtual] >= 10) {
+                alert('Limite de 10 números atingido.');
+                return;
+            }
+
+            if (usuarioPreenchidoPorLinha[linha].has(usuarioAtual)) {
+                alert('Você já preencheu uma célula nesta linha.');
+                return;
+            }
+
+            const idCelula = `celula-${linha}-${coluna}`;
+            const celula = document.getElementById(idCelula);
+
+            if (celula.classList.contains('disabled')) {
+                alert('Célula já preenchida.');
+                return;
+            }
+
+            const valor = prompt('Digite um número entre 1 e 60:');
+            if (valor < 1 || valor > 60 || isNaN(valor)) {
+                alert('Número inválido.');
+                return;
+            }
+
+            for (let j = 0; j < 6; j++) {
+                const outraCelula = document.getElementById(`celula-${linha}-${j}`);
+                if (outraCelula.innerText === valor) {
+                    alert('Número já existe nesta linha.');
+                    return;
+                }
+            }
+
+            celula.innerText = valor;
+            celula.classList.add('disabled', usuarioAtual);
+            usuarioPreenchidoPorLinha[linha].add(usuarioAtual);
+            contadoresUsuarios[usuarioAtual]++;
+            salvarDados();
+        }
+
+        function salvarDados() {
+            localStorage.setItem('usuarioPreenchidoPorLinha', JSON.stringify(usuarioPreenchidoPorLinha));
+            localStorage.setItem('contadoresUsuarios', JSON.stringify(contadoresUsuarios));
+        }
+
+        function carregarDados() {
+            const dados = JSON.parse(localStorage.getItem('tabelaDados')) || [];
+            dados.forEach(dado => {
+                const { linha, coluna, valor, usuario } = dado;
+                const celula = document.getElementById(`celula-${linha}-${coluna}`);
+                celula.innerText = valor;
+                celula.classList.add('disabled', usuario);
+            });
+        }
+
+        function limparCelulasUsuario() {
+            for (let i = 0; i < 70; i++) {
+                for (let j = 0; j < 6; j++) {
+                    const celula = document.getElementById(`celula-${i}-${j}`);
+                    if (celula.classList.contains(usuarioAtual)) {
+                        celula.innerText = '';
+                        celula.classList.remove('disabled', usuarioAtual);
+                    }
+                }
+            }
+            salvarDados();
+        }
+
+        function limparTodasCelulas() {
+            if (usuarioAtual !== 'admin') {
+                alert('Apenas o administrador pode limpar todas as células.');
+                return;
+            }
+
+            localStorage.clear();
+            location.reload();
+        }
+
+        gerarTabela();
+    </script>
+</body>
+</html>
