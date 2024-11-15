@@ -17,91 +17,6 @@
         .user7 { background-color: moccasin; }
         #btn-relatorio, #btn-limpar-todas { display: none; }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script type="module">
-        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-
-        const SUPABASE_URL = '<SUA_SUPABASE_URL>';
-        const SUPABASE_KEY = '<SUA_SUPABASE_KEY>';
-        const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-        const senhas = ["familia1", "familia2", "familia3", "familia4", "familia5", "familia6", "familia7", "admin"];
-        const usuarios = ["user1", "user2", "user3", "user4", "user5", "user6", "user7", "admin"];
-        let usuarioAtual = null;
-        let loginAtivo = false;
-
-        async function gerarTabela() {
-            let tabelaHTML = '';
-            for (let i = 0; i < 70; i++) {
-                tabelaHTML += '<tr>';
-                for (let j = 0; j < 6; j++) {
-                    tabelaHTML += `<td id="celula-${i}-${j}" onclick="preencherCelula(${i}, ${j})"></td>`;
-                }
-                tabelaHTML += '</tr>';
-            }
-            document.getElementById('tabela').innerHTML = tabelaHTML;
-            await carregarDados();
-        }
-
-        async function carregarDados() {
-            const { data, error } = await supabase.from('celulas').select('*');
-            if (error) {
-                console.error('Erro ao carregar dados:', error);
-                return;
-            }
-            data.forEach(({ linha, coluna, valor, usuario }) => {
-                const celula = document.getElementById(`celula-${linha}-${coluna}`);
-                celula.innerText = valor;
-                celula.classList.add('disabled', usuario);
-            });
-        }
-
-        async function preencherCelula(linha, coluna) {
-            if (!loginAtivo) {
-                alert('Por favor, faça login.');
-                return;
-            }
-            const idCelula = `celula-${linha}-${coluna}`;
-            const celula = document.getElementById(idCelula);
-
-            if (celula.classList.contains('disabled')) {
-                alert('Célula já preenchida.');
-                return;
-            }
-
-            const valor = prompt('Digite um número entre 1 e 60:');
-            if (valor < 1 || valor > 60 || isNaN(valor)) {
-                alert('Número inválido.');
-                return;
-            }
-
-            celula.innerText = valor;
-            celula.classList.add('disabled', usuarioAtual);
-
-            const { error } = await supabase.from('celulas').insert([
-                { linha, coluna, valor, usuario: usuarioAtual }
-            ]);
-            if (error) {
-                console.error('Erro ao salvar dados:', error);
-            }
-        }
-
-        function verificarLogin() {
-            const senha = document.getElementById('senha').value;
-            const usuarioSelecionado = document.getElementById('usuario').value;
-            const senhaCorreta = senhas[usuarios.indexOf(usuarioSelecionado)];
-
-            if (senha === senhaCorreta) {
-                loginAtivo = true;
-                usuarioAtual = usuarioSelecionado;
-                alert('Login realizado com sucesso!');
-            } else {
-                alert('Senha incorreta.');
-            }
-        }
-
-        gerarTabela();
-    </script>
 </head>
 <body>
     <h2>Preenchimento da Tabela</h2>
@@ -122,6 +37,69 @@
     <input type="password" id="senha">
     <button onclick="verificarLogin()">Entrar</button>
     <br><br>
+
     <table id="tabela"></table>
+    <br>
+    <button onclick="limparCelulasUsuario()">Limpar minhas células</button>
+    <button id="btn-limpar-todas" onclick="limparTodasCelulas()">Limpar todas as células (Admin)</button>
+
+    <script>
+        const usuarios = ["user1", "user2", "user3", "user4", "user5", "user6", "user7", "admin"];
+        let usuarioAtual = null;
+        let loginAtivo = false;
+
+        function gerarTabela() {
+            let tabelaHTML = '';
+            for (let i = 0; i < 70; i++) {
+                tabelaHTML += '<tr>';
+                for (let j = 0; j < 6; j++) {
+                    tabelaHTML += `<td id="celula-${i}-${j}" onclick="preencherCelula(${i}, ${j})"></td>`;
+                }
+                tabelaHTML += '</tr>';
+            }
+            document.getElementById('tabela').innerHTML = tabelaHTML;
+        }
+
+        function verificarLogin() {
+            const usuarioSelecionado = document.getElementById('usuario').value;
+            if (usuarioSelecionado !== "---") {
+                loginAtivo = true;
+                usuarioAtual = usuarioSelecionado;
+                alert('Login realizado com sucesso!');
+            } else {
+                alert('Por favor, selecione um usuário.');
+            }
+        }
+
+        async function preencherCelula(linha, coluna) {
+            if (!loginAtivo) {
+                alert('Por favor, faça login.');
+                return;
+            }
+
+            const valor = prompt('Digite um número entre 1 e 60:');
+            if (valor < 1 || valor > 60 || isNaN(valor)) {
+                alert('Número inválido.');
+                return;
+            }
+
+            const response = await fetch('/api/saveData', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ linha, coluna, valor, usuario: usuarioAtual })
+            });
+
+            if (response.ok) {
+                const celula = document.getElementById(`celula-${linha}-${coluna}`);
+                celula.innerText = valor;
+                celula.classList.add('disabled', usuarioAtual);
+                alert('Número salvo com sucesso!');
+            } else {
+                alert('Erro ao salvar número.');
+            }
+        }
+
+        gerarTabela();
+    </script>
 </body>
 </html>
