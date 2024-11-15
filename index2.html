@@ -17,7 +17,6 @@
         .user7 { background-color: moccasin; }
         #btn-relatorio, #btn-limpar-todas { display: none; }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
     <h2>Preenchimento da Tabela</h2>
@@ -50,20 +49,43 @@
         const usuarios = ["user1", "user2", "user3", "user4", "user5", "user6", "user7", "admin"];
         let usuarioAtual = null;
         let loginAtivo = false;
-        let usuarioPreenchidoPorLinha = JSON.parse(localStorage.getItem('usuarioPreenchidoPorLinha')) || Array(70).fill(null).map(() => new Set());
-        let contadoresUsuarios = JSON.parse(localStorage.getItem('contadoresUsuarios')) || { user1: 0, user2: 0, user3: 0, user4: 0, user5: 0, user6: 0, user7: 0 };
+        let usuarioPreenchidoPorLinha = [];
+        let contadoresUsuarios = {};
 
-        function gerarTabela() {
-            let tabelaHTML = '';
+        async function carregarDadosAPI() {
+            const response = await fetch('/api/save-data');
+            const data = await response.json();
+            usuarioPreenchidoPorLinha = data.usuarioPreenchidoPorLinha || Array(70).fill(null).map(() => new Set());
+            contadoresUsuarios = data.contadoresUsuarios || { user1: 0, user2: 0, user3: 0, user4: 0, user5: 0, user6: 0, user7: 0 };
+            carregarTabela(data.tabelaDados);
+        }
+
+        async function salvarDadosAPI() {
+            const dados = {
+                tabelaDados: [],
+                usuarioPreenchidoPorLinha,
+                contadoresUsuarios
+            };
+
             for (let i = 0; i < 70; i++) {
-                tabelaHTML += '<tr>';
                 for (let j = 0; j < 6; j++) {
-                    tabelaHTML += `<td id="celula-${i}-${j}" onclick="preencherCelula(${i}, ${j})"></td>`;
+                    const celula = document.getElementById(`celula-${i}-${j}`);
+                    if (celula.innerText) {
+                        dados.tabelaDados.push({
+                            linha: i,
+                            coluna: j,
+                            valor: celula.innerText,
+                            usuario: [...celula.classList].find(cls => cls.startsWith('user'))
+                        });
+                    }
                 }
-                tabelaHTML += '</tr>';
             }
-            document.getElementById('tabela').innerHTML = tabelaHTML;
-            carregarDados();
+
+            await fetch('/api/save-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dados)
+            });
         }
 
         function verificarLogin() {
@@ -84,90 +106,18 @@
             }
         }
 
-        function preencherCelula(linha, coluna) {
-            if (!loginAtivo) {
-                alert('Por favor, faça login.');
-                return;
-            }
-
-            if (contadoresUsuarios[usuarioAtual] >= 10) {
-                alert('Limite de 10 números atingido.');
-                return;
-            }
-
-            if (usuarioPreenchidoPorLinha[linha].has(usuarioAtual)) {
-                alert('Você já preencheu uma célula nesta linha.');
-                return;
-            }
-
-            const idCelula = `celula-${linha}-${coluna}`;
-            const celula = document.getElementById(idCelula);
-
-            if (celula.classList.contains('disabled')) {
-                alert('Célula já preenchida.');
-                return;
-            }
-
+        async function preencherCelula(linha, coluna) {
+            if (!loginAtivo) return alert('Por favor, faça login.');
+            if (contadoresUsuarios[usuarioAtual] >= 10) return alert('Limite de 10 números atingido.');
+            
+            const celula = document.getElementById(`celula-${linha}-${coluna}`);
             const valor = prompt('Digite um número entre 1 e 60:');
-            if (valor < 1 || valor > 60 || isNaN(valor)) {
-                alert('Número inválido.');
-                return;
-            }
-
-            for (let j = 0; j < 6; j++) {
-                const outraCelula = document.getElementById(`celula-${linha}-${j}`);
-                if (outraCelula.innerText === valor) {
-                    alert('Número já existe nesta linha.');
-                    return;
-                }
-            }
-
             celula.innerText = valor;
-            celula.classList.add('disabled', usuarioAtual);
-            usuarioPreenchidoPorLinha[linha].add(usuarioAtual);
             contadoresUsuarios[usuarioAtual]++;
-            salvarDados();
+            await salvarDadosAPI();
         }
 
-        function salvarDados() {
-            localStorage.setItem('usuarioPreenchidoPorLinha', JSON.stringify(usuarioPreenchidoPorLinha));
-            localStorage.setItem('contadoresUsuarios', JSON.stringify(contadoresUsuarios));
-        }
-
-        function carregarDados() {
-            const dados = JSON.parse(localStorage.getItem('tabelaDados')) || [];
-            dados.forEach(dado => {
-                const { linha, coluna, valor, usuario } = dado;
-                const celula = document.getElementById(`celula-${linha}-${coluna}`);
-                celula.innerText = valor;
-                celula.classList.add('disabled', usuario);
-            });
-        }
-
-        function limparCelulasUsuario() {
-            for (let i = 0; i < 70; i++) {
-                for (let j = 0; j < 6; j++) {
-                    const celula = document.getElementById(`celula-${i}-${j}`);
-                    if (celula.classList.contains(usuarioAtual)) {
-                        celula.innerText = '';
-                        celula.classList.remove('disabled', usuarioAtual);
-                    }
-                }
-            }
-            salvarDados();
-        }
-
-        function limparTodasCelulas() {
-            if (usuarioAtual !== 'admin') {
-                alert('Apenas o administrador pode limpar todas as células.');
-                return;
-            }
-
-            localStorage.clear();
-            location.reload();
-        }
-
-        gerarTabela();
+        carregarDadosAPI();
     </script>
 </body>
 </html>
